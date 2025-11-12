@@ -74,3 +74,5 @@ $ make test
 
 -   Learn how to [contribute](CONTRIBUTING.md)
 -   See [issues](https://github.com/teramoby/speedle-plus/issues) for issues you can help with
+
+updated by Cursor (wcai@)
