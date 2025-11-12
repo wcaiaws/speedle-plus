@@ -4,13 +4,12 @@
 package eval
 
 import (
-	"regexp"
 	"strings"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/teramoby/speedle-plus/3rdparty/github.com/Knetic/govaluate"
 	adsapi "github.com/teramoby/speedle-plus/api/ads"
 	"github.com/teramoby/speedle-plus/api/pms"
-	log "github.com/sirupsen/logrus"
 )
 
 func matchResource(requestRes string, resources, resExpressions []string) bool {
@@ -24,8 +23,7 @@ func matchResource(requestRes string, resources, resExpressions []string) bool {
 		}
 	}
 	for _, resExp := range resExpressions {
-		matched, err := regexp.MatchString(resExp, requestRes)
-		if err == nil && matched {
+		if re, err := compileRegexCached(resExp); err == nil && re != nil && re.MatchString(requestRes) {
 			return true
 		}
 	}
@@ -41,7 +39,9 @@ func matchResourceAction(policy *pms.Policy, ctx *internalRequestContext) bool {
 	for _, perm := range policy.Permissions {
 		resExpMatch := false
 		if len(perm.ResourceExpression) != 0 {
-			resExpMatch, _ = regexp.MatchString(perm.ResourceExpression, ctx.Resource)
+			if re, err := compileRegexCached(perm.ResourceExpression); err == nil && re != nil {
+				resExpMatch = re.MatchString(ctx.Resource)
+			}
 			//TODO log error
 		}
 		resNameMatch := perm.Resource == ctx.Resource
@@ -130,8 +130,7 @@ func calculatePermissions(grantedPermissions, deniedPermissions []pms.Permission
 		for _, deniedPermission := range deniedPermissions {
 			expMatched := false
 			if len(deniedPermission.ResourceExpression) > 0 {
-				matched, err := regexp.MatchString(deniedPermission.ResourceExpression, grantPermission.Resource)
-				if err != nil || matched {
+				if re, err := compileRegexCached(deniedPermission.ResourceExpression); err != nil || (re != nil && re.MatchString(grantPermission.Resource)) {
 					//TODO: log err
 					expMatched = true
 				}
@@ -182,8 +181,8 @@ func evaluateCondition(condition *govaluate.EvaluableExpression, attributes map[
 	return true, nil
 }
 
-func matchRolePolicyPrincipals(subjectPrincipalList []string, rolePolicyPrincipalList []string) bool {
-	if subjectPrincipalList == nil || len(subjectPrincipalList) == 0 {
+func matchRolePolicyPrincipals(subjectPrincipalSet map[string]struct{}, rolePolicyPrincipalList []string) bool {
+	if len(subjectPrincipalSet) == 0 {
 		return false
 	}
 
@@ -192,11 +191,8 @@ func matchRolePolicyPrincipals(subjectPrincipalList []string, rolePolicyPrincipa
 	}
 	matched := false
 	for _, policyPrincipal := range rolePolicyPrincipalList {
-		for _, subjectPrincipal := range subjectPrincipalList {
-			if policyPrincipal == subjectPrincipal {
-				matched = true
-				break
-			}
+		if _, ok := subjectPrincipalSet[policyPrincipal]; ok {
+			matched = true
 		}
 		if matched {
 			break
@@ -206,11 +202,12 @@ func matchRolePolicyPrincipals(subjectPrincipalList []string, rolePolicyPrincipa
 
 }
 
-/**
+/*
+*
 It's regarded as matched only if all items in princs2 are included in princs1
 */
-func matchPrincipals(subjectPrincipalList []string, policyPrincipalList [][]string) bool {
-	if subjectPrincipalList == nil || len(subjectPrincipalList) == 0 {
+func matchPrincipals(subjectPrincipalSet map[string]struct{}, policyPrincipalList [][]string) bool {
+	if len(subjectPrincipalSet) == 0 {
 		return false
 	}
 
@@ -222,15 +219,7 @@ func matchPrincipals(subjectPrincipalList []string, policyPrincipalList [][]stri
 		// one of item in policy principals matched, returns true
 		matched := true
 		for _, policyPrincipal := range andPrincipals {
-			matchedOnePrincipal := false
-			// Check if the policy principal in subject principal list
-			for _, subjectPrincipal := range subjectPrincipalList {
-				if policyPrincipal == subjectPrincipal {
-					// matched
-					matchedOnePrincipal = true
-					break
-				}
-			}
+			_, matchedOnePrincipal := subjectPrincipalSet[policyPrincipal]
 			// The policy principal is not found in subjectPrincipalList, not match
 			if !matchedOnePrincipal {
 				matched = false

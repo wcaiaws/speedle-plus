@@ -4,12 +4,11 @@
 package eval
 
 import (
-	"fmt"
 	"sync"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/teramoby/speedle-plus/3rdparty/github.com/Knetic/govaluate"
 	"github.com/teramoby/speedle-plus/api/pms"
-	log "github.com/sirupsen/logrus"
 )
 
 type RuntimePolicyStore struct {
@@ -91,10 +90,9 @@ func (rtps *RuntimePolicyStore) deleteService(serviceName string) {
 }
 
 func (rtps *RuntimePolicyStore) recompilePolicyConditionAtRuntime(serviceName string, policy *pms.Policy) (*govaluate.EvaluableExpression, error) {
-	fmt.Println("recompile condition for policy:", policy)
 	condition, err := compileCondition(policy.Condition, rtps.Functions)
 	if err == nil {
-		fmt.Println("updating condition for policy in another goroutine:", policy)
+		log.Debugf("updating condition for policy %s in service %s", policy.ID, serviceName)
 		go updatePolicyCondition(rtps, serviceName, policy, condition)
 	}
 	return condition, err
@@ -115,10 +113,9 @@ func updatePolicyCondition(rtps *RuntimePolicyStore, serviceName string, policy 
 }
 
 func (rtps *RuntimePolicyStore) recompileRolePolicyConditionAtRuntime(serviceName string, policy *pms.RolePolicy) (*govaluate.EvaluableExpression, error) {
-	fmt.Println("recompile condition for role policy:", policy)
 	condition, err := compileCondition(policy.Condition, rtps.Functions)
 	if err == nil {
-		fmt.Println("updating condition for role policy in another goroutine:", policy)
+		log.Debugf("updating condition for role policy %s in service %s", policy.ID, serviceName)
 		go updateRolePolicyCondition(rtps, serviceName, policy, condition)
 	}
 	return condition, err

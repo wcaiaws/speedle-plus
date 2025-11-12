@@ -1,5 +1,5 @@
-//Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
-//Licensed under the Universal Permissive License (UPL) Version 1.0 as shown at http://oss.oracle.com/licenses/upl.
+// Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+// Licensed under the Universal Permissive License (UPL) Version 1.0 as shown at http://oss.oracle.com/licenses/upl.
 package eval
 
 import (
@@ -17,9 +17,9 @@ import (
 	"github.com/teramoby/speedle-plus/api/ext"
 	"github.com/teramoby/speedle-plus/api/pms"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/teramoby/speedle-plus/3rdparty/github.com/Knetic/govaluate"
 	"github.com/teramoby/speedle-plus/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -144,9 +144,21 @@ func (frc *FuncResultCache) generateCustomerExpressionFunction(cfdUrl *string, c
 }
 
 func getKey(funcName string, arguments []interface{}) string {
-	key := fmt.Sprintf("%s(%v)", funcName, arguments)
-	fmt.Println("key=", key)
-	return key
+	if len(arguments) == 0 {
+		return funcName + "()"
+	}
+	var builder strings.Builder
+	builder.Grow(len(funcName) + len(arguments)*4)
+	builder.WriteString(funcName)
+	builder.WriteByte('(')
+	for i, arg := range arguments {
+		if i > 0 {
+			builder.WriteByte(',')
+		}
+		builder.WriteString(fmt.Sprint(arg))
+	}
+	builder.WriteByte(')')
+	return builder.String()
 }
 
 func isFunc(key, funcName string) bool {
